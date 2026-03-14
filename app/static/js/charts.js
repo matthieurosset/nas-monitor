@@ -4,32 +4,56 @@ const CHART_COLORS = [
     '#39d353', '#db6d28', '#f778ba', '#a5d6ff', '#7ee787',
 ];
 
-// Plugin: on legend hover, dim all other datasets
+// Highlight hovered dataset, dim others. Only updates when hovered index changes.
 const highlightPlugin = {
     id: 'highlightOnHover',
     beforeEvent(chart, args) {
         const event = args.event;
         if (event.type === 'mousemove') {
             const elements = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, false);
-            if (elements.length > 0) {
-                const hoveredIndex = elements[0].datasetIndex;
+            const newIndex = elements.length > 0 ? elements[0].datasetIndex : -1;
+            if (newIndex === chart._lastHovered) return;
+            chart._lastHovered = newIndex;
+            if (newIndex >= 0) {
                 chart.data.datasets.forEach((ds, i) => {
-                    ds.borderWidth = i === hoveredIndex ? 3 : 1;
-                    ds.borderColor = i === hoveredIndex
-                        ? ds._originalColor || ds.borderColor
-                        : (ds._originalColor || ds.borderColor) + '30';
+                    const c = ds._originalColor;
+                    ds.borderWidth = i === newIndex ? 3 : 1;
+                    ds.borderColor = i === newIndex ? c : c + '25';
                 });
-                chart.update('none');
             }
+            chart.update('none');
         } else if (event.type === 'mouseout') {
+            if (chart._lastHovered === -1) return;
+            chart._lastHovered = -1;
             chart.data.datasets.forEach(ds => {
                 ds.borderWidth = 1.5;
-                ds.borderColor = ds._originalColor || ds.borderColor;
+                ds.borderColor = ds._originalColor;
             });
             chart.update('none');
         }
     }
 };
+
+function applyHighlight(chart, activeIndex) {
+    if (chart._lastHovered === activeIndex) return;
+    chart._lastHovered = activeIndex;
+    chart.data.datasets.forEach((ds, i) => {
+        const c = ds._originalColor;
+        ds.borderWidth = i === activeIndex ? 3 : 1;
+        ds.borderColor = i === activeIndex ? c : c + '25';
+    });
+    chart.update('none');
+}
+
+function clearHighlight(chart) {
+    if (chart._lastHovered === -1) return;
+    chart._lastHovered = -1;
+    chart.data.datasets.forEach(ds => {
+        ds.borderWidth = 1.5;
+        ds.borderColor = ds._originalColor;
+    });
+    chart.update('none');
+}
 
 const CHART_DEFAULTS = {
     responsive: true,
@@ -49,22 +73,10 @@ const CHART_DEFAULTS = {
                 font: { size: 11 },
             },
             onHover(event, legendItem, legend) {
-                const chart = legend.chart;
-                chart.data.datasets.forEach((ds, i) => {
-                    ds.borderWidth = i === legendItem.datasetIndex ? 3 : 1;
-                    ds.borderColor = i === legendItem.datasetIndex
-                        ? ds._originalColor || ds.borderColor
-                        : (ds._originalColor || ds.borderColor) + '30';
-                });
-                chart.update('none');
+                applyHighlight(legend.chart, legendItem.datasetIndex);
             },
             onLeave(event, legendItem, legend) {
-                const chart = legend.chart;
-                chart.data.datasets.forEach(ds => {
-                    ds.borderWidth = 1.5;
-                    ds.borderColor = ds._originalColor || ds.borderColor;
-                });
-                chart.update('none');
+                clearHighlight(legend.chart);
             },
         },
         tooltip: {
@@ -75,14 +87,8 @@ const CHART_DEFAULTS = {
             borderWidth: 1,
             padding: 10,
             bodyFont: { size: 12 },
-            filter: (item) => item.datasetIndex === item.chart._hoveredDatasetIndex,
-            callbacks: {
-                beforeBody(items) {
-                    if (items.length > 0) {
-                        items[0].chart._hoveredDatasetIndex = items[0].datasetIndex;
-                    }
-                },
-            },
+            mode: 'nearest',
+            intersect: false,
         },
     },
     scales: {
