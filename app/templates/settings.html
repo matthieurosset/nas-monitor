@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Settings - nas-monitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Settings</h2>
+</div>
+
+<div class="settings-grid">
+    <!-- General Settings -->
+    <div class="card">
+        <div class="card-header"><h3>General</h3></div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('settings.update_general') }}">
+                <div class="form-group">
+                    <label>Polling Interval (seconds)</label>
+                    <input type="number" name="polling_interval" value="{{ settings.get('polling_interval', '30') }}" min="10" max="300">
+                </div>
+                <div class="form-group">
+                    <label>Data Retention (days)</label>
+                    <input type="number" name="retention_days" value="{{ settings.get('retention_days', '7') }}" min="1" max="30">
+                </div>
+                <div class="form-group">
+                    <label>Alert CPU Threshold (%)</label>
+                    <input type="number" name="alert_cpu_threshold" value="{{ settings.get('alert_cpu_threshold', '80') }}" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Alert RAM Threshold (%)</label>
+                    <input type="number" name="alert_ram_threshold" value="{{ settings.get('alert_ram_threshold', '80') }}" min="1" max="100">
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Plex Scheduling -->
+    <div class="card">
+        <div class="card-header"><h3>Plex Scheduling</h3></div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('settings.update_general') }}">
+                <div class="form-group">
+                    <label>Plex Container Name</label>
+                    <input type="text" name="plex_container" value="{{ settings.get('plex_container', 'plex') }}">
+                </div>
+                <div class="form-group">
+                    <label>CPU Threshold for Stream Detection (%)</label>
+                    <input type="number" name="plex_cpu_threshold" value="{{ settings.get('plex_cpu_threshold', '20') }}" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Network Threshold (bytes/s)</label>
+                    <input type="number" name="plex_net_threshold" value="{{ settings.get('plex_net_threshold', '50000000') }}">
+                </div>
+                <div class="form-group">
+                    <label>Action Delay (seconds)</label>
+                    <input type="number" name="plex_action_delay" value="{{ settings.get('plex_action_delay', '60') }}" min="0">
+                    <small>Wait before pausing containers (avoid false positives)</small>
+                </div>
+                <div class="form-group">
+                    <label>Restart Delay (seconds)</label>
+                    <input type="number" name="plex_restart_delay" value="{{ settings.get('plex_restart_delay', '300') }}" min="0">
+                    <small>Wait after Plex stops before restarting containers</small>
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card">
+        <div class="card-header"><h3>Notifications</h3></div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('settings.update_notifications') }}">
+                <div class="form-group">
+                    <label>Discord Webhook URL</label>
+                    <input type="url" name="discord_webhook" value="{{ settings.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/...">
+                </div>
+                <div class="form-group">
+                    <label>Telegram Bot Token</label>
+                    <input type="text" name="telegram_bot_token" value="{{ settings.get('telegram_bot_token', '') }}" placeholder="123456:ABC-DEF...">
+                </div>
+                <div class="form-group">
+                    <label>Telegram Chat ID</label>
+                    <input type="text" name="telegram_chat_id" value="{{ settings.get('telegram_chat_id', '') }}">
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+            <div class="form-actions" style="margin-top: 1rem">
+                <form method="post" action="{{ url_for('settings.test_notif') }}" style="display: inline">
+                    <input type="hidden" name="channel" value="discord">
+                    <button type="submit" class="btn btn-sm">Test Discord</button>
+                </form>
+                <form method="post" action="{{ url_for('settings.test_notif') }}" style="display: inline">
+                    <input type="hidden" name="channel" value="telegram">
+                    <button type="submit" class="btn btn-sm">Test Telegram</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container Scheduling Rules -->
+    <div class="card card-full">
+        <div class="card-header"><h3>Container Scheduling Rules</h3></div>
+        <div class="card-body">
+            <p class="help-text">Configure what happens to each container when Plex is streaming.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Container</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>When Plex Streams</th>
+                            <th>Auto Restart</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in containers %}
+                        <tr>
+                            <form method="post" action="{{ url_for('settings.update_container_config') }}">
+                                <input type="hidden" name="container_name" value="{{ c.name }}">
+                                <td><strong>{{ c.name }}</strong></td>
+                                <td><span class="status-badge status-{{ c.status }}">{{ c.status }}</span></td>
+                                <td>
+                                    <select name="priority">
+                                        {% set cfg = configs.get(c.name) %}
+                                        <option value="essential" {% if cfg and cfg.priority == 'essential' %}selected{% endif %}>Essential</option>
+                                        <option value="normal" {% if not cfg or cfg.priority == 'normal' %}selected{% endif %}>Normal</option>
+                                        <option value="low" {% if cfg and cfg.priority == 'low' %}selected{% endif %}>Low</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="plex_action">
+                                        <option value="none" {% if not cfg or cfg.plex_action == 'none' %}selected{% endif %}>Nothing</option>
+                                        <option value="pause" {% if cfg and cfg.plex_action == 'pause' %}selected{% endif %}>Pause</option>
+                                        <option value="stop" {% if cfg and cfg.plex_action == 'stop' %}selected{% endif %}>Stop</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="checkbox" name="auto_restart" {% if not cfg or cfg.auto_restart %}checked{% endif %}>
+                                </td>
+                                <td>
+                                    <button type="submit" class="btn btn-sm">Save</button>
+                                </td>
+                            </form>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

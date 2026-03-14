@@ -1,0 +1,65 @@
+{% if stats %}
+<div class="stats-grid">
+    {% for s in stats %}
+    <div class="card container-card">
+        <div class="card-header">
+            <div class="container-info">
+                <span class="container-name">{{ s.name }}</span>
+                <span class="status-badge status-{{ s.status }}">{{ s.status }}</span>
+                {% if s.name in paused %}
+                <span class="status-badge status-paused-plex">paused for plex</span>
+                {% endif %}
+            </div>
+            <div class="container-actions">
+                {% if s.status == 'running' %}
+                <form method="post" action="/action" hx-post="/action" hx-target="#action-result" hx-swap="innerHTML">
+                    <input type="hidden" name="container" value="{{ s.name }}">
+                    <button type="submit" name="action" value="pause" class="btn btn-sm btn-warning" onclick="return confirm('Pause {{ s.name }}?')">Pause</button>
+                    <button type="submit" name="action" value="stop" class="btn btn-sm btn-danger" onclick="return confirm('Stop {{ s.name }}?')">Stop</button>
+                </form>
+                {% elif s.status == 'paused' %}
+                <form method="post" action="/action" hx-post="/action" hx-target="#action-result" hx-swap="innerHTML">
+                    <input type="hidden" name="container" value="{{ s.name }}">
+                    <button type="submit" name="action" value="unpause" class="btn btn-sm btn-success">Unpause</button>
+                </form>
+                {% elif s.status == 'exited' %}
+                <form method="post" action="/action" hx-post="/action" hx-target="#action-result" hx-swap="innerHTML">
+                    <input type="hidden" name="container" value="{{ s.name }}">
+                    <button type="submit" name="action" value="start" class="btn btn-sm btn-success">Start</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="metric-row">
+                <span class="metric-label">CPU</span>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if s.cpu_percent > 80 %}danger{% elif s.cpu_percent > 50 %}warning{% else %}success{% endif %}"
+                         style="width: {{ [s.cpu_percent, 100] | min }}%"></div>
+                </div>
+                <span class="metric-value">{{ s.cpu_percent }}%</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">RAM</span>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if s.memory_percent > 80 %}danger{% elif s.memory_percent > 50 %}warning{% else %}success{% endif %}"
+                         style="width: {{ [s.memory_percent, 100] | min }}%"></div>
+                </div>
+                <span class="metric-value">{{ s.memory_mb }} MB ({{ s.memory_percent }}%)</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Net</span>
+                <span class="metric-value net-value">
+                    &#x2193; {{ (s.network_rx / 1048576) | round(1) }} MB
+                    &#x2191; {{ (s.network_tx / 1048576) | round(1) }} MB
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No running containers found. Make sure Docker socket is mounted.</p>
+</div>
+{% endif %}

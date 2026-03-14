@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - nas-monitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Dashboard</h2>
+    <span class="badge">Live</span>
+</div>
+
+<div id="container-stats"
+     hx-get="/partials/container-stats"
+     hx-trigger="load, every 10s"
+     hx-swap="innerHTML">
+    <div class="loading">Loading container stats...</div>
+</div>
+{% endblock %}

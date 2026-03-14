@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Insights - nas-monitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Insights</h2>
+    <span class="badge badge-muted">Updated hourly</span>
+</div>
+
+{% if not recurring and not correlations and not recommendations %}
+<div class="empty-state">
+    <p>No insights yet. Data will be analyzed after collecting metrics for a few hours.</p>
+</div>
+{% endif %}
+
+{% if recommendations %}
+<section class="insight-section">
+    <h3>Recommendations</h3>
+    <div class="insight-grid">
+        {% for r in recommendations %}
+        <div class="card insight-card recommendation">
+            <div class="card-body">
+                <div class="insight-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#58a6ff" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+                </div>
+                <p class="insight-text">{{ r.description }}</p>
+                <span class="insight-time">{{ r.detected_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if recurring %}
+<section class="insight-section">
+    <h3>Recurring Peaks</h3>
+    <div class="insight-grid">
+        {% for r in recurring %}
+        <div class="card insight-card peak">
+            <div class="card-body">
+                <div class="insight-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#d29922" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <p class="insight-text">{{ r.description }}</p>
+                <span class="insight-time">{{ r.detected_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if correlations %}
+<section class="insight-section">
+    <h3>Correlations</h3>
+    <div class="insight-grid">
+        {% for c in correlations %}
+        <div class="card insight-card correlation">
+            <div class="card-body">
+                <div class="insight-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#3fb950" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                </div>
+                <p class="insight-text">{{ c.description }}</p>
+                <span class="insight-time">{{ c.detected_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

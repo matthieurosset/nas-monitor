@@ -1,0 +1,5 @@
+<div class="alert {% if success %}alert-success{% else %}alert-danger{% endif %}"
+     hx-swap-oob="true" id="action-result">
+    {{ message }}
+    <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+</div>

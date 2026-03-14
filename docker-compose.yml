@@ -1,0 +1,21 @@
+services:
+  nas-monitor:
+    build: .
+    image: ghcr.io/matthieurosset/nas-monitor:latest
+    container_name: nas-monitor
+    ports:
+      - "5200:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nas-monitor-data:/data
+    environment:
+      - PUID=1038
+      - PGID=65536
+      - UMASK=022
+      - DATABASE_PATH=/data/nas-monitor.db
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  nas-monitor-data:
+    driver: local
