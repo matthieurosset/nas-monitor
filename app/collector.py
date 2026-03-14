@@ -191,7 +191,7 @@ def container_action(container_name, action):
 
 
 def _calc_cpu_percent(stats):
-    """Calculate CPU percentage from Docker stats."""
+    """Calculate CPU percentage as fraction of total system (100% = all cores)."""
     cpu_stats = stats.get('cpu_stats', {})
     precpu_stats = stats.get('precpu_stats', {})
 
@@ -204,7 +204,7 @@ def _calc_cpu_percent(stats):
     system_delta = system_total - presystem_total
 
     if system_delta > 0 and cpu_delta >= 0:
-        num_cpus = cpu_stats.get('online_cpus', 1)
-        return (cpu_delta / system_delta) * num_cpus * 100.0
+        # No num_cpus multiplier: 100% means all cores maxed out
+        return (cpu_delta / system_delta) * 100.0
 
     return 0.0
