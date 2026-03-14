@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 
-from app.collector import get_live_stats, get_container_list
+from app.collector import get_latest_stats, get_container_list
 from app.scheduler import is_plex_active, get_paused_containers
 from app.analyzer import get_insights
 
@@ -10,7 +10,7 @@ api_bp = Blueprint('api', __name__)
 @api_bp.route('/stats')
 def stats():
     """JSON endpoint for current container stats."""
-    return jsonify(get_live_stats())
+    return jsonify(get_latest_stats())
 
 
 @api_bp.route('/containers')

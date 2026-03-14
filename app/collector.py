@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 import docker
@@ -22,8 +23,33 @@ def get_docker_client():
     return _docker_client
 
 
+def _fetch_one_stat(container):
+    """Fetch stats for a single container (runs in thread pool)."""
+    stats = container.stats(stream=False)
+    cpu_percent = _calc_cpu_percent(stats)
+    mem_usage = stats['memory_stats'].get('usage', 0)
+    mem_limit = stats['memory_stats'].get('limit', 1)
+    mem_percent = (mem_usage / mem_limit) * 100 if mem_limit else 0
+
+    networks = stats.get('networks', {})
+    rx = sum(n.get('rx_bytes', 0) for n in networks.values())
+    tx = sum(n.get('tx_bytes', 0) for n in networks.values())
+
+    return {
+        'id': container.short_id,
+        'name': container.name,
+        'status': container.status,
+        'cpu_percent': round(cpu_percent, 2),
+        'memory_bytes': mem_usage,
+        'memory_mb': round(mem_usage / (1024 * 1024), 1),
+        'memory_percent': round(mem_percent, 2),
+        'network_rx': rx,
+        'network_tx': tx,
+    }
+
+
 def collect_metrics(app):
-    """Collect CPU/RAM/network stats from all running containers."""
+    """Collect CPU/RAM/network stats from all running containers in parallel."""
     client = get_docker_client()
     if not client:
         return
@@ -36,34 +62,36 @@ def collect_metrics(app):
             return
 
         now = datetime.now(timezone.utc)
+        results = _fetch_all_stats(containers)
 
-        for container in containers:
-            try:
-                stats = container.stats(stream=False)
-                cpu_percent = _calc_cpu_percent(stats)
-                mem_usage = stats['memory_stats'].get('usage', 0)
-                mem_limit = stats['memory_stats'].get('limit', 1)
-                mem_percent = (mem_usage / mem_limit) * 100 if mem_limit else 0
-
-                networks = stats.get('networks', {})
-                rx = sum(n.get('rx_bytes', 0) for n in networks.values())
-                tx = sum(n.get('tx_bytes', 0) for n in networks.values())
-
-                metric = Metric(
-                    container_id=container.short_id,
-                    container_name=container.name,
-                    timestamp=now,
-                    cpu_percent=round(cpu_percent, 2),
-                    memory_bytes=mem_usage,
-                    memory_percent=round(mem_percent, 2),
-                    network_rx=rx,
-                    network_tx=tx,
-                )
-                db.session.add(metric)
-            except Exception as e:
-                logger.warning("Error collecting stats for %s: %s", container.name, e)
+        for r in results:
+            metric = Metric(
+                container_id=r['id'],
+                container_name=r['name'],
+                timestamp=now,
+                cpu_percent=r['cpu_percent'],
+                memory_bytes=r['memory_bytes'],
+                memory_percent=r['memory_percent'],
+                network_rx=r['network_rx'],
+                network_tx=r['network_tx'],
+            )
+            db.session.add(metric)
 
         db.session.commit()
+
+
+def _fetch_all_stats(containers):
+    """Fetch stats for all containers in parallel using threads."""
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_one_stat, c): c for c in containers}
+        for future in as_completed(futures):
+            container = futures[future]
+            try:
+                results.append(future.result())
+            except Exception as e:
+                logger.warning("Error collecting stats for %s: %s", container.name, e)
+    return results
 
 
 def cleanup_old_metrics(app):
@@ -101,43 +129,40 @@ def get_container_list():
         return []
 
 
-def get_live_stats():
-    """Get current stats for all running containers."""
-    client = get_docker_client()
-    if not client:
+def get_latest_stats():
+    """Get the most recent metrics from DB (collected every 30s)."""
+    from sqlalchemy import func
+    # Get the latest timestamp
+    latest_ts = db.session.query(func.max(Metric.timestamp)).scalar()
+    if not latest_ts:
         return []
 
-    results = []
-    try:
-        for container in client.containers.list():
-            try:
-                stats = container.stats(stream=False)
-                cpu_percent = _calc_cpu_percent(stats)
-                mem_usage = stats['memory_stats'].get('usage', 0)
-                mem_limit = stats['memory_stats'].get('limit', 1)
-                mem_percent = (mem_usage / mem_limit) * 100 if mem_limit else 0
+    metrics = Metric.query.filter_by(timestamp=latest_ts).all()
 
-                networks = stats.get('networks', {})
-                rx = sum(n.get('rx_bytes', 0) for n in networks.values())
-                tx = sum(n.get('tx_bytes', 0) for n in networks.values())
+    # Merge with container list to get status
+    client = get_docker_client()
+    status_map = {}
+    if client:
+        try:
+            for c in client.containers.list(all=True):
+                status_map[c.name] = c.status
+        except Exception:
+            pass
 
-                results.append({
-                    'id': container.short_id,
-                    'name': container.name,
-                    'status': container.status,
-                    'cpu_percent': round(cpu_percent, 2),
-                    'memory_bytes': mem_usage,
-                    'memory_mb': round(mem_usage / (1024 * 1024), 1),
-                    'memory_percent': round(mem_percent, 2),
-                    'network_rx': rx,
-                    'network_tx': tx,
-                })
-            except Exception as e:
-                logger.warning("Error getting stats for %s: %s", container.name, e)
-    except Exception as e:
-        logger.error("Error listing containers: %s", e)
-
-    return results
+    return [
+        {
+            'id': m.container_id,
+            'name': m.container_name,
+            'status': status_map.get(m.container_name, 'unknown'),
+            'cpu_percent': m.cpu_percent,
+            'memory_bytes': m.memory_bytes,
+            'memory_mb': round(m.memory_bytes / (1024 * 1024), 1),
+            'memory_percent': m.memory_percent,
+            'network_rx': m.network_rx,
+            'network_tx': m.network_tx,
+        }
+        for m in metrics
+    ]
 
 
 def container_action(container_name, action):

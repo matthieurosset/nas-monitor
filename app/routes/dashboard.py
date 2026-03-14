@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify
 
-from app.collector import get_live_stats, container_action, get_container_list
+from app.collector import get_latest_stats, container_action, get_container_list
 from app.scheduler import is_plex_active, get_paused_containers
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -20,7 +20,7 @@ def index():
 @dashboard_bp.route('/partials/container-stats')
 def container_stats_partial():
     """HTMX endpoint: returns updated container stats rows."""
-    stats = get_live_stats()
+    stats = get_latest_stats()
     return render_template(
         'partials/container_stats.html',
         stats=stats,
