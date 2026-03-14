@@ -165,6 +165,62 @@ def get_latest_stats():
     ]
 
 
+_prev_cpu_times = None
+
+
+def get_host_stats():
+    """Read host CPU and RAM from /proc (accessible in container)."""
+    global _prev_cpu_times
+    cpu_percent = 0.0
+    ram_total_mb = 0.0
+    ram_used_mb = 0.0
+    ram_percent = 0.0
+
+    # CPU from /proc/stat
+    try:
+        with open('/proc/stat', 'r') as f:
+            line = f.readline()  # first line: cpu  user nice system idle iowait irq softirq ...
+        parts = line.split()
+        times = [int(x) for x in parts[1:]]
+        total = sum(times)
+        idle = times[3] + (times[4] if len(times) > 4 else 0)  # idle + iowait
+
+        if _prev_cpu_times is not None:
+            prev_total, prev_idle = _prev_cpu_times
+            delta_total = total - prev_total
+            delta_idle = idle - prev_idle
+            if delta_total > 0:
+                cpu_percent = round((1 - delta_idle / delta_total) * 100, 1)
+
+        _prev_cpu_times = (total, idle)
+    except Exception as e:
+        logger.warning("Cannot read /proc/stat: %s", e)
+
+    # RAM from /proc/meminfo
+    try:
+        meminfo = {}
+        with open('/proc/meminfo', 'r') as f:
+            for line in f:
+                parts = line.split()
+                meminfo[parts[0].rstrip(':')] = int(parts[1])  # in kB
+
+        ram_total_kb = meminfo.get('MemTotal', 0)
+        ram_available_kb = meminfo.get('MemAvailable', 0)
+        ram_used_kb = ram_total_kb - ram_available_kb
+        ram_total_mb = round(ram_total_kb / 1024, 1)
+        ram_used_mb = round(ram_used_kb / 1024, 1)
+        ram_percent = round((ram_used_kb / ram_total_kb) * 100, 1) if ram_total_kb else 0
+    except Exception as e:
+        logger.warning("Cannot read /proc/meminfo: %s", e)
+
+    return {
+        'cpu_percent': cpu_percent,
+        'ram_total_mb': ram_total_mb,
+        'ram_used_mb': ram_used_mb,
+        'ram_percent': ram_percent,
+    }
+
+
 def container_action(container_name, action):
     """Perform an action on a container (start, stop, pause, unpause)."""
     client = get_docker_client()

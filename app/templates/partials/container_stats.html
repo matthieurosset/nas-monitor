@@ -1,24 +1,30 @@
 {% if stats %}
 <div class="global-summary">
-    <div class="summary-card">
-        <span class="summary-label">Total CPU</span>
+    <div class="summary-card summary-card-wide">
+        <span class="summary-label">CPU</span>
         <div class="progress-bar progress-bar-lg">
-            <div class="progress-fill {% if total_cpu > 80 %}danger{% elif total_cpu > 50 %}warning{% else %}success{% endif %}"
-                 style="width: {{ [total_cpu, 100] | min }}%"></div>
+            <div class="progress-fill docker-fill" style="width: {{ [docker_cpu, 100] | min }}%"></div>
+            <div class="progress-fill system-fill" style="width: {{ [[host_cpu - docker_cpu, 0] | max, 100 - docker_cpu] | min }}%"></div>
         </div>
-        <span class="summary-value">{{ total_cpu }}%</span>
+        <span class="summary-value">
+            <span class="legend-dot docker-dot"></span>Docker {{ docker_cpu }}%
+            <span class="legend-dot system-dot"></span>System {{ host_cpu }}%
+        </span>
     </div>
-    <div class="summary-card">
-        <span class="summary-label">Total RAM</span>
+    <div class="summary-card summary-card-wide">
+        <span class="summary-label">RAM</span>
         <div class="progress-bar progress-bar-lg">
-            <div class="progress-fill {% if total_ram_percent > 80 %}danger{% elif total_ram_percent > 50 %}warning{% else %}success{% endif %}"
-                 style="width: {{ [total_ram_percent, 100] | min }}%"></div>
+            <div class="progress-fill docker-fill" style="width: {{ [docker_ram_percent, 100] | min }}%"></div>
+            <div class="progress-fill system-fill" style="width: {{ [[host_ram_percent - docker_ram_percent, 0] | max, 100 - docker_ram_percent] | min }}%"></div>
         </div>
-        <span class="summary-value">{{ total_ram_mb | round(0) | int }} MB ({{ total_ram_percent }}%)</span>
+        <span class="summary-value">
+            <span class="legend-dot docker-dot"></span>Docker {{ docker_ram_mb | round(0) | int }} MB
+            <span class="legend-dot system-dot"></span>Total {{ host_ram_used_mb | round(0) | int }} / {{ host_ram_total_mb | round(0) | int }} MB
+        </span>
     </div>
     <div class="summary-card">
         <span class="summary-label">Containers</span>
-        <span class="summary-value">{{ stats | length }} running</span>
+        <span class="summary-value summary-count">{{ stats | length }}</span>
     </div>
 </div>
 
