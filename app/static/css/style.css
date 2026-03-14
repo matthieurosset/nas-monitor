@@ -162,6 +162,22 @@ a:hover {
     font-weight: 600;
 }
 
+.page-header .btn svg {
+    vertical-align: middle;
+    margin-right: 0.25rem;
+}
+
+.htmx-indicator {
+    display: none;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request ~ .htmx-indicator {
+    display: inline;
+}
+
 .badge {
     display: inline-flex;
     align-items: center;

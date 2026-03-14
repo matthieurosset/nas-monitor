@@ -4,12 +4,39 @@ const CHART_COLORS = [
     '#39d353', '#db6d28', '#f778ba', '#a5d6ff', '#7ee787',
 ];
 
+// Plugin: on legend hover, dim all other datasets
+const highlightPlugin = {
+    id: 'highlightOnHover',
+    beforeEvent(chart, args) {
+        const event = args.event;
+        if (event.type === 'mousemove') {
+            const elements = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, false);
+            if (elements.length > 0) {
+                const hoveredIndex = elements[0].datasetIndex;
+                chart.data.datasets.forEach((ds, i) => {
+                    ds.borderWidth = i === hoveredIndex ? 3 : 1;
+                    ds.borderColor = i === hoveredIndex
+                        ? ds._originalColor || ds.borderColor
+                        : (ds._originalColor || ds.borderColor) + '30';
+                });
+                chart.update('none');
+            }
+        } else if (event.type === 'mouseout') {
+            chart.data.datasets.forEach(ds => {
+                ds.borderWidth = 1.5;
+                ds.borderColor = ds._originalColor || ds.borderColor;
+            });
+            chart.update('none');
+        }
+    }
+};
+
 const CHART_DEFAULTS = {
     responsive: true,
     maintainAspectRatio: false,
     animation: { duration: 300 },
     interaction: {
-        mode: 'index',
+        mode: 'nearest',
         intersect: false,
     },
     plugins: {
@@ -21,6 +48,24 @@ const CHART_DEFAULTS = {
                 padding: 12,
                 font: { size: 11 },
             },
+            onHover(event, legendItem, legend) {
+                const chart = legend.chart;
+                chart.data.datasets.forEach((ds, i) => {
+                    ds.borderWidth = i === legendItem.datasetIndex ? 3 : 1;
+                    ds.borderColor = i === legendItem.datasetIndex
+                        ? ds._originalColor || ds.borderColor
+                        : (ds._originalColor || ds.borderColor) + '30';
+                });
+                chart.update('none');
+            },
+            onLeave(event, legendItem, legend) {
+                const chart = legend.chart;
+                chart.data.datasets.forEach(ds => {
+                    ds.borderWidth = 1.5;
+                    ds.borderColor = ds._originalColor || ds.borderColor;
+                });
+                chart.update('none');
+            },
         },
         tooltip: {
             backgroundColor: '#1c2128',
@@ -30,6 +75,14 @@ const CHART_DEFAULTS = {
             borderWidth: 1,
             padding: 10,
             bodyFont: { size: 12 },
+            filter: (item) => item.datasetIndex === item.chart._hoveredDatasetIndex,
+            callbacks: {
+                beforeBody(items) {
+                    if (items.length > 0) {
+                        items[0].chart._hoveredDatasetIndex = items[0].datasetIndex;
+                    }
+                },
+            },
         },
     },
     scales: {
@@ -62,6 +115,8 @@ function initCharts() {
     const netCtx = document.getElementById('network-chart');
 
     if (!cpuCtx) return;
+
+    Chart.register(highlightPlugin);
 
     cpuChart = new Chart(cpuCtx, {
         type: 'line',
@@ -145,6 +200,7 @@ function updateCharts(data) {
         const base = {
             label: name,
             borderColor: color,
+            _originalColor: color,
             backgroundColor: color + '20',
             borderWidth: 1.5,
             pointRadius: 0,
