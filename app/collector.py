@@ -62,6 +62,7 @@ def collect_metrics(app):
             return
 
         now = datetime.now(timezone.utc)
+        _read_host_stats()  # sample host CPU/RAM at same time as containers
         results = _fetch_all_stats(containers)
 
         for r in results:
@@ -166,24 +167,27 @@ def get_latest_stats():
 
 
 _prev_cpu_times = None
+_cached_host_stats = {
+    'cpu_percent': 0.0,
+    'ram_total_mb': 0.0,
+    'ram_used_mb': 0.0,
+    'ram_percent': 0.0,
+}
 
 
-def get_host_stats():
-    """Read host CPU and RAM from /proc (accessible in container)."""
-    global _prev_cpu_times
-    cpu_percent = 0.0
-    ram_total_mb = 0.0
-    ram_used_mb = 0.0
-    ram_percent = 0.0
+def _read_host_stats():
+    """Read host CPU and RAM from /proc and update cache. Called by collect_metrics."""
+    global _prev_cpu_times, _cached_host_stats
+    cpu_percent = _cached_host_stats['cpu_percent']  # keep previous if read fails
 
     # CPU from /proc/stat
     try:
         with open('/proc/stat', 'r') as f:
-            line = f.readline()  # first line: cpu  user nice system idle iowait irq softirq ...
+            line = f.readline()
         parts = line.split()
         times = [int(x) for x in parts[1:]]
         total = sum(times)
-        idle = times[3] + (times[4] if len(times) > 4 else 0)  # idle + iowait
+        idle = times[3] + (times[4] if len(times) > 4 else 0)
 
         if _prev_cpu_times is not None:
             prev_total, prev_idle = _prev_cpu_times
@@ -197,12 +201,15 @@ def get_host_stats():
         logger.warning("Cannot read /proc/stat: %s", e)
 
     # RAM from /proc/meminfo
+    ram_total_mb = 0.0
+    ram_used_mb = 0.0
+    ram_percent = 0.0
     try:
         meminfo = {}
         with open('/proc/meminfo', 'r') as f:
             for line in f:
                 parts = line.split()
-                meminfo[parts[0].rstrip(':')] = int(parts[1])  # in kB
+                meminfo[parts[0].rstrip(':')] = int(parts[1])
 
         ram_total_kb = meminfo.get('MemTotal', 0)
         ram_available_kb = meminfo.get('MemAvailable', 0)
@@ -213,12 +220,17 @@ def get_host_stats():
     except Exception as e:
         logger.warning("Cannot read /proc/meminfo: %s", e)
 
-    return {
+    _cached_host_stats = {
         'cpu_percent': cpu_percent,
         'ram_total_mb': ram_total_mb,
         'ram_used_mb': ram_used_mb,
         'ram_percent': ram_percent,
     }
+
+
+def get_host_stats():
+    """Return cached host stats (updated every 30s by collect_metrics)."""
+    return _cached_host_stats.copy()
 
 
 def container_action(container_name, action):
